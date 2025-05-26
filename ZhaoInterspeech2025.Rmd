@@ -1,0 +1,348 @@
+---
+title: "Supplementary materials | Investigating Glottal Stop Coda Loss During Sound Change of Checked Syllables Based on Speech-EGG Voice Offset Alignment"
+author: "Bingliang Zhao"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      warning = FALSE,
+                      error = FALSE,
+                      message = FALSE,
+                      options(warn=-1))
+library(readxl)
+library(writexl)
+library(dplyr)
+library(tidyverse)
+library(tidyr)
+library(ggplot2)
+library(ggExtra)
+library(ggpubr)
+library(ggpmisc)
+library(patchwork)
+library(factoextra)
+library(forcats)
+library(FactoMineR)
+library(lme4)
+library(lmerTest)
+library(export)
+library(showtext)
+library(Hmisc)
+library(broom)
+library(ggridges)
+library(foreign)
+library(agricolae)
+
+# font setting
+font_add("arial","arial.ttf")
+showtext_auto()
+```
+
+# Get ready
+
+Data from four female participants (OF8, OF9, YF6, YF7) and one male participant (OM6) were excluded due to the poor quality of their EGG signals.
+
+Audio files with incidental noise were also excluded.
+```{r echo = TRUE, warning = FALSE, error = FALSE, message = FALSE}
+# load the original database
+load('ZhaoInterspeech2025.RData')
+
+# Marking the outliers for every age*sex group using the 3-standard deviation criterion
+df.ALL = df.interspeech2025data %>%
+  group_by(age,sex) %>%
+  mutate(VOL_mean = mean(VOL,na.rm = TRUE),
+         VOL_sd = sd(VOL,na.rm = TRUE),) %>%
+  ungroup()
+df.ALL$outlier = ifelse(df.ALL$VOL >= df.ALL$VOL_mean-3*df.ALL$VOL_sd & df.ALL$VOL <= df.ALL$VOL_mean+3*df.ALL$VOL_sd,0,1)
+
+# 3,027 valid tokens for subsequent analysis
+df.VALID = filter(df.ALL,outlier == 0)
+```
+
+Calculate R^2^ of CQ & VOL for every participant.
+```{r echo = TRUE, warning = FALSE, error = FALSE, message = FALSE}
+participants = unique(df.ALL$participant)
+paras = c('CQ', 'VOL')
+df.R2 = data.frame(participants)
+colnames(df.R2)[1] = 'participant'
+colnames(df.participantInfo)[1] = 'participant'
+df.R2$age = ifelse(substr(as.character(df.R2$participant),1,1) == "O", 'Old','Young')
+df.R2$sex = ifelse(substr(as.character(df.R2$participant),2,2) == "M", 'Male','Female')
+df.R2 = merge(df.R2,df.participantInfo,by = 'participant')
+```
+
+Run GLMs for every participant
+```{r echo = TRUE, warning = FALSE, error = FALSE, message = FALSE}
+for (i in c(1:length(participants))){
+  for (para in paras){
+    m = lm(get(para) ~ syllable_type,data = filter(df.ALL,participant == participants[i]))
+    # dependent variable: CQ / VOL
+    # fixed factor: syllable type (binary coded)
+    summary_model = summary(m)
+    p_value = summary_model$coefficients[2, 4]
+    beta = summary_model$coefficients[2, 1]
+    r2_adj = summary_model$adj.r.squared
+    df.R2[i,paste(para,'p',sep='_')] = p_value
+    df.R2[i,paste(para,'b',sep='_')] = beta
+    df.R2[i,paste(para,'r',sep='_')] = r2_adj
+    if (para == 'VOL'){
+      df.R2[i,paste(para,'Yes',sep='_')] = ifelse(p_value < 0.05 & beta<0,1,0)
+    }
+    else{
+      df.R2[i,paste(para,'Yes',sep='_')] = ifelse(p_value < 0.05 & beta>0,1,0)
+    }
+  }
+}
+```
+
+As checked syllables are expected to have more glottal constriction, higher CQ is anticipated for checked. Therefore, CQ_Yes is a binary factor whose value is equal to 1 when checked CQ is significantly higher than unchecked CQ (beta > 0 & p < .05).
+
+VOL_Yes is a binary factor whose value is equal to 1 when checked VOL is significantly lower than unchecked CQ (beta < 0 & p < .05).
+```{r echo = TRUE, warning = FALSE, error = FALSE, message = FALSE}
+df.R2$CQ_Yes = factor(df.R2$CQ_Yes)
+df.R2$VOL_Yes = factor(df.R2$VOL_Yes)
+```
+
+# Statistical analysis
+
+## Section 3.1
+
+The R^2^s, beta coefficients, and _p_ values of CQ/VOL generated from GLMs for every participant can be seen in **df.R2**.
+```{r}
+knitr::kable(df.R2)
+```
+
+A strong positive correlation was discovered between R^2^ values of VOL and CQ. All participants were included in the Pearson's r test.
+```{r echo = TRUE, warning = FALSE, error = FALSE, message = FALSE}
+cor.test(df.R2$CQ_r,df.R2$VOL_r)
+```
+
+## Section 3.2
+
+### Age-related differences in raw VOL
+
+Linear mixed-effects models were employed to examine VOL differences between checked and unchecked syllables. Age & sex fixed effects and their interactions with syllable type were tested.
+
+We first fitted the base model which included fixed effects of syllable_type/age/sex, their two-way/three-way interactions and random intercept of participant.
+```{r echo = TRUE, warning = FALSE, error = FALSE, message = FALSE}
+m.base = lmer(VOL~syllable_type*age*sex + (1|participant), df.VALID)
+```
+
+Including random intercept of item significantly improved model fit compared to **m.base** (p < .05).
+```{r echo = TRUE, warning = FALSE, error = FALSE, message = FALSE}
+m.itemAdd = lmer(VOL~syllable_type*age*sex + (1|participant) + (1|item), df.VALID)
+anova(m.base,m.itemAdd)
+```
+
+Including random slope of syllable_type for participant significantly improved model fit compared to **m.itemAdd** (p < .05).
+```{r echo = TRUE, warning = FALSE, error = FALSE, message = FALSE}
+m.typeAnditemAdd = lmer(VOL~syllable_type*age*sex + (syllable_type|participant) + (1|item), df.VALID)
+anova(m.itemAdd, m.typeAnditemAdd)
+```
+
+Including random slope of age/sex for item didn't improve model fit compared to **m.itemAdd** (p > .05).
+```{r echo = TRUE, warning = FALSE, error = FALSE, message = FALSE}
+m.itemAndageAdd = lmer(VOL~syllable_type*age*sex + (1|participant) + (age|item), df.VALID)
+m.itemAndsexAdd = lmer(VOL~syllable_type*age*sex + (1|participant) + (sex|item), df.VALID)
+anova(m.itemAdd, m.itemAndageAdd, m.itemAndsexAdd)
+```
+
+Including random slope of age&sex for item led to boundary (singular) fit or failure to converge.
+```{r echo = TRUE, warning = TRUE, error = TRUE, message = TRUE}
+m.itemAndageAndsexAdd = lmer(VOL~syllable_type*age*sex + (1|participant) + (age+sex|item), df.VALID)
+m.itemAndagePlussexAdd = lmer(VOL~syllable_type*age*sex + (1|participant) + (age*sex|item), df.VALID)
+```
+
+compared to **m.typeAnditemAdd**, including random slope of age for item significantly improved model fit (p < .05) while including random slope of sex for item didn't.
+```{r echo = TRUE, warning = FALSE, error = FALSE, message = FALSE}
+m.itemAndageWithtypeAdd = lmer(VOL~syllable_type*age*sex + (syllable_type|participant) + (age|item), df.VALID)
+m.itemAndsexWithtypeAdd = lmer(VOL~syllable_type*age*sex + (syllable_type|participant) + (sex|item), df.VALID)
+anova(m.typeAnditemAdd, m.itemAndageWithtypeAdd, m.itemAndsexWithtypeAdd)
+```
+
+Again,including random slope of age&sex for item led to boundary (singular) fit.
+```{r echo = TRUE, warning = TRUE, error = TRUE, message = TRUE}
+m.itemAndsexAndageWithtypeAdd = lmer(VOL~syllable_type*age*sex + (syllable_type|participant) + (age+sex|item), df.VALID)
+```
+
+Finally, **m.itemAndageWithtypeAdd** was chosen as the best model. Here are the outputs.
+```{r echo = TRUE, warning = FALSE, error = FALSE, message = FALSE}
+summary(m.itemAndageWithtypeAdd)
+```
+
+### Age-related differences in mean and S.D. of VOL
+
+The mean and standard deviation of VOL for checked and unchecked syllables were separately calculated for each participant.
+```{r echo = TRUE, warning = FALSE, error = FALSE, message = FALSE}
+df.SUM = df.VALID %>%
+  group_by(participant,syllable_type,age,sex) %>%
+  summarise(VOL_mean = mean(VOL,na.rm = TRUE),
+            VOL_sd = sd(VOL,na.rm = TRUE)) %>%
+  ungroup()
+```
+
+In the older group, both the mean and standard deviation of VOL for checked syllables were significantly smaller than those for unchecked syllables.
+```{r echo = TRUE, warning = FALSE, error = FALSE, message = FALSE}
+m.VOLmean.Old = lm(VOL_mean ~ syllable_type, filter(df.SUM,age == 'Old'))
+summary(m.VOLmean.Old)
+m.VOLsd.Old = lm(VOL_sd ~ syllable_type, filter(df.SUM,age == 'Old'))
+summary(m.VOLsd.Old)
+```
+
+In the younger group, these measures showed no significant difference between checked and unchecked syllables.
+```{r echo = TRUE, warning = FALSE, error = FALSE, message = FALSE}
+m.VOLmean.Young = lm(VOL_mean ~ syllable_type, filter(df.SUM,age == 'Young'))
+summary(m.VOLmean.Young)
+m.VOLsd.Young = lm(VOL_sd ~ syllable_type, filter(df.SUM,age == 'Young'))
+summary(m.VOLsd.Young)
+```
+
+# Graphs
+
+## Figure 2
+
+Figure2_left shows the correlation of VOL with CQ among the eighteen participants whose checked CQ is significantly higher than unchecked CQ.
+
+Figure2_right shows the distributions of VOL/CQ for an old male participant (OM8)
+```{r echo = FALSE, warning = FALSE, error = FALSE, message = FALSE}
+Figure2_left = ggplot(filter(df.R2,CQ_Yes == 1), aes(x = CQ_r, y = VOL_r))+
+  geom_smooth(method = lm,color = 'gray80',fill = 'gray80',alpha = 0.2,linewidth = 1)+
+  geom_point(aes(shape = sex,color = age),size = 2.5)+
+  annotate("segment", x = 0.756, y = 0.34, xend = 0.756, yend = 0.375, arrow = arrow(length=unit(0.2,"cm")),linetype=1,size=0.8, color = "#c0321a")+
+  scale_color_manual(values = c('black','gray60')) +
+  scale_shape_manual(values = c(16,17))+
+  labs(x = expression(paste(R^2,' for CQ')),y = expression(paste(R^2,' for VOL')))+
+  theme_bw(base_family = "arial")+
+  theme(strip.text = element_text(size = 16,hjust=0),
+        strip.background = element_blank(),
+        plot.title = element_text(size = 18, face = "bold"),
+        axis.title.x = element_text(size = 18, face = "bold"),
+        axis.title.y = element_text(size = 18, face = "bold", angle = 90),
+        axis.text = element_text(size = 14),
+        legend.title = element_text(size = 16, face = "bold"),
+        legend.text = element_text(size = 16),
+        legend.position = "bottom",
+        panel.border = element_rect(colour = "black", linewidth = 1),
+        legend.background = element_rect(fill = "transparent"))+guides(shape = guide_legend(ncol = 1),color = guide_legend(ncol = 1))
+Figure2_rightCQ = ggplot(filter(df.VALID, participant == 'OM8'), aes(x= CQ,fill = syllable_type))+
+  geom_boxplot(width=0.04,position=position_dodge(width=0.045),staplewidth = 0.5)+
+  scale_fill_manual(name = "Syllable types", 
+                    labels = c("Unchecked", "Checked"), 
+                    values = c('#2c7bb6','#fdae61')) +
+  labs(x='CQ (%)')+
+  theme_bw(base_family = "arial")+
+  theme(strip.text = element_text(size = 16,hjust=0),
+        strip.background = element_blank(),
+        plot.title = element_text(size = 18, face = "bold"),
+        axis.title.x = element_text(size = 18, face = "bold"),
+        axis.title.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.text = element_text(size = 14),
+        legend.title = element_text(size = 16, face = "bold"),
+        legend.text = element_text(size = 16),
+        legend.position = "bottom",
+        panel.border = element_rect(colour = "black", linewidth = 1),
+        legend.background = element_rect(fill = "transparent"))+guides(fill = guide_legend(ncol = 1))
+Figure2_rightVOL = ggplot(filter(df.VALID, participant == 'OM8'), aes(x= VOL,fill = syllable_type))+
+  geom_boxplot(width=0.04,position=position_dodge(width=0.045),staplewidth = 0.5)+
+  scale_fill_manual(name = "Syllable types", 
+                    labels = c("Unchecked", "Checked"), 
+                    values = c('#2c7bb6','#fdae61')) +
+  labs(x='VOL (ms)')+
+  theme_bw(base_family = "arial")+
+  theme(strip.text = element_text(size = 16,hjust=0),
+        strip.background = element_blank(),
+        plot.title = element_text(size = 18, face = "bold"),
+        axis.title.x = element_text(size = 18, face = "bold"),
+        axis.title.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.text = element_text(size = 14),
+        legend.title = element_text(size = 16, face = "bold"),
+        legend.text = element_text(size = 16),
+        legend.position = "bottom",
+        panel.border = element_rect(colour = "black", linewidth = 1),
+        legend.background = element_rect(fill = "transparent"))+guides(fill = guide_legend(ncol = 1))
+Figure2_right = (Figure2_rightVOL + Figure2_rightCQ +plot_layout(nrow=2)) + plot_layout(guides = 'collect')&theme(legend.position = 'bottom')
+Figure2 = Figure2_left + Figure2_right
+Figure2
+```
+
+## Figure 3
+
+```{r echo = FALSE, warning = FALSE, error = FALSE, message = FALSE}
+Figure3 = ggplot(df.VALID, aes(x= VOL, fill = syllable_type))+
+  geom_density(alpha = 0.5,linewidth = 0.5,adjust = 1,position = 'identity')+
+  geom_boxplot(aes(y = -0.03),width=0.04,position=position_dodge(width=0.045),staplewidth = 0.5)+
+  geom_vline(aes(xintercept=0),linetype="dashed")+
+  scale_fill_manual(name = "Syllable types", 
+                    labels = c("Unchecked", "Checked"), 
+                    values = c('#2c7bb6','#fdae61')) +
+  labs(x='VOL (ms)')+
+  theme_bw(base_family = "arial")+
+  theme(strip.text = element_text(size = 16,hjust=0),
+        strip.background = element_blank(),
+        plot.title = element_text(size = 18, face = "bold"),
+        axis.title.x = element_text(size = 18, face = "bold"),
+        axis.title.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.text = element_text(size = 14),
+        legend.title = element_text(size = 16, face = "bold"),
+        legend.text = element_text(size = 16),
+        legend.position = "bottom",
+        panel.border = element_rect(colour = "black", linewidth = 1),
+        legend.background = element_rect(fill = "transparent")) + facet_grid(sex~age)
+Figure3
+```
+
+## Figure 4
+```{r echo = FALSE, warning = FALSE, error = FALSE, message = FALSE}
+Figure4_left = ggplot(df.SUM, aes(y= VOL_mean,x = age,fill = syllable_type))+
+  geom_boxplot(staplewidth = 0.5)+ 
+  labs(y = 'Mean of VOL (ms)')+
+  scale_fill_manual(name = "Syllable types", 
+                    labels = c("Unchecked", "Checked"), 
+                    values = c('#2c7bb6','#fdae61')) +
+  theme_bw(base_family = "arial")+
+  theme(strip.text = element_text(size = 16,hjust=0),
+        strip.background = element_blank(),
+        plot.title = element_text(size = 18, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 18, face = "bold", angle = 90),
+        axis.text = element_text(size = 14),
+        legend.title = element_text(size = 16, face = "bold"),
+        legend.text = element_text(size = 16),
+        legend.position = "bottom",
+        panel.border = element_rect(colour = "black", linewidth = 1),
+        legend.background = element_rect(fill = "transparent"))
+
+Figure4_right = ggplot(df.SUM, aes(y= VOL_sd,x = age,fill = syllable_type))+
+  geom_boxplot(staplewidth = 0.5)+
+  labs(y='S.D. of VOL (ms)')+
+  scale_fill_manual(name = "Syllable types", 
+                    labels = c("Unchecked", "Checked"), 
+                    values = c('#2c7bb6','#fdae61')) +
+  theme_bw(base_family = "arial")+
+  theme(strip.text = element_text(size = 16,hjust=0),
+        strip.background = element_blank(),
+        plot.title = element_text(size = 18, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 18, face = "bold", angle = 90),
+        axis.text = element_text(size = 14),
+        legend.title = element_text(size = 16, face = "bold"),
+        legend.text = element_text(size = 16),
+        legend.position = "bottom",
+        panel.border = element_rect(colour = "black", linewidth = 1),
+        legend.background = element_rect(fill = "transparent"))
+
+Figure4 = Figure4_left + Figure4_right +
+  plot_layout(guides = 'collect')&theme(legend.position = 'bottom')
+
+Figure4
+```
