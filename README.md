@@ -1,5 +1,6 @@
 # Interspeech2025
-This repository includes supplementary materials for the paper accepted by Interspeech 2025.
+This repository created by Bingliang Zhao includes supplementary materials for the paper accepted by Interspeech 2025.
+
 
 - 
 
