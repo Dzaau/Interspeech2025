@@ -4,7 +4,7 @@ This repository, created by Bingliang Zhao, includes supplementary materials for
 # File descriptions
 
 1. **`GCIDetectionForEGG.mlx`**  
-    A MATLAB (R2023a) function developed by the first author to detect Glottal Closure Instances (GCIs) in Electroglottography (EGG) signals. Includes interactive examples and visualizations. The Signal Processing Toolbox and Wavelet Toolbox are needed to run the function successfully.
+    A MATLAB (R2023a) function developed by the first author to detect Glottal Closure Instants (GCIs) in Electroglottography (EGG) signals. Includes interactive examples and visualizations. The Signal Processing Toolbox and Wavelet Toolbox are needed to run the function successfully.
     
 2. **Sample Wave Files (`*.wav`)**  
     Four speech/EGG recordings representing _checked_ and _unchecked_ tokens. You may use these to validate the GCI detection function.
