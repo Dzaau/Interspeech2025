@@ -111,9 +111,30 @@ df.R2$VOL_Yes = factor(df.R2$VOL_Yes)
 
 ## Section 3.1
 
-The R^2^s, beta coefficients, and _p_ values of CQ/VOL generated from GLMs for every participant can be seen in **df.R2**.
+The R^2^s, beta coefficients, and _p_ values of CQ/VOL generated from GLMs for every participant can be seen in **df.R2** (visualized in the following figure).
 ```{r}
 knitr::kable(df.R2)
+```
+
+```{r echo = FALSE, warning = FALSE, error = FALSE, message = FALSE}
+p.PPT = ggplot(df.R2, aes(x = CQ_r, y = VOL_r, color = interaction(CQ_Yes, VOL_Yes)))+
+  geom_point(size=3)+
+  scale_color_manual(values = c('black','#2c7bb6','#c0321a','#fdae61')) +
+  theme_bw(base_family = "arial")+
+  labs(x = expression(paste(R^2,' for CQ')),y = expression(paste(R^2,' for VOL')))+
+  theme(strip.text = element_text(size = 16,hjust=0),
+        strip.background = element_blank(),
+        plot.title = element_text(size = 18, face = "bold"),
+        axis.title.x = element_text(size = 18, face = "bold"),
+        axis.title.y = element_text(size = 18, face = "bold", angle = 90),
+        axis.text = element_text(size = 14),
+        legend.title = element_text(size = 16, face = "bold"),
+        legend.text = element_text(size = 16),
+        legend.position = "bottom",
+        panel.border = element_rect(colour = "black", linewidth = 1),
+        legend.background = element_rect(fill = "transparent"))+facet_wrap(~age)
+
+p.PPT 
 ```
 
 A strong positive correlation was discovered between R^2^ values of VOL and CQ. All participants were included in the Pearson's r test.
